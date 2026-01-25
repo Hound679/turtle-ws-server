@@ -19,8 +19,15 @@ function broadcastState() {
 }
 
 wss.on("connection", (ws) => {
+  // 🔒 Límite de 2 jugadores
+  if (clients.size >= 2) {
+    ws.send(JSON.stringify({ type: "full" }));
+    ws.close();
+    return;
+  }
+
   const id = String(nextId++);
-  const index = clients.size;
+  const index = clients.size; // 0 o 1
 
   const player = {
     id,
