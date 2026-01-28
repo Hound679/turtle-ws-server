@@ -19,24 +19,27 @@ function broadcastState() {
 }
 
 wss.on("connection", (ws) => {
-  // 🔒 Límite de 2 jugadores
-  if (clients.size >= 2) {
+    // ✅ Limit to 8 players
+  if (clients.size >= 8) {
     ws.send(JSON.stringify({ type: "full" }));
     ws.close();
     return;
   }
 
   const id = String(nextId++);
-  const index = clients.size; // 0 o 1
+  const index = clients.size; // 0..7
+
+  const colors = ["green","blue","red","orange","purple","cyan","magenta","brown"];
 
   const player = {
     id,
     x: 400,
     y: 250,
     angle: 0,
-    color: index === 0 ? "green" : "blue",
-    label: index === 0 ? "Player" : "Player1"
+    color: colors[index],
+    label: `Player${index + 1}`
   };
+
 
   clients.set(ws, player);
 
