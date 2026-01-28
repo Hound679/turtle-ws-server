@@ -74,7 +74,7 @@ function startBot() {
       const msg = BOT_MESSAGES[Math.floor(Math.random() * BOT_MESSAGES.length)];
       broadcastChat(room, "ServerBot", msg);
     }
-  }, 60000); // ✅ every 60 seconds (change if you want)
+  }, 6000); // ✅ every 60 seconds (change if you want)
 }
 
 
