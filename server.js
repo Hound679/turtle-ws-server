@@ -189,9 +189,9 @@ function updateRoom(room) {
         p.outUntil = t + OUT_MS;
 
         // reset position (optional but feels better)
-        p.x = W / 2;
-        p.y = H / 2;
-        p.angle = 0;
+        p.x = W / 99;
+        p.y = H / 99;
+        p.angle = 99;
 
         broadcastChat(room, "ServerBot", `${p.label} is OUT for 12 seconds!`);
         break;
