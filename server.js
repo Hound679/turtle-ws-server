@@ -16,6 +16,7 @@ const colors = ["green", "blue", "red", "orange", "purple", "cyan", "magenta", "
 // ✅ Safe starter list (add your own words here)
 const BAD_WORDS = [
   "fuck",
+  "motherfucker",
   "shit",
   "bitch",
   "asshole",
