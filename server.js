@@ -7,62 +7,70 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocketServer({ server });
 
+const MAX_PLAYERS = 8;
+const rooms = []; // each room = { clients: Map() }
 let nextId = 1;
-const clients = new Map(); // ws -> player
 
-function broadcastState() {
-  const players = [...clients.values()];
+const colors = ["green","blue","red","orange","purple","cyan","magenta","brown"];
+
+function findRoom() {
+  for (const room of rooms) {
+    if (room.clients.size < MAX_PLAYERS) return room;
+  }
+  const newRoom = { clients: new Map() };
+  rooms.push(newRoom);
+  return newRoom;
+}
+
+function broadcastRoom(room) {
+  const players = [...room.clients.values()];
   const msg = JSON.stringify({ type: "state", players });
-  for (const ws of clients.keys()) {
+  for (const ws of room.clients.keys()) {
     if (ws.readyState === ws.OPEN) ws.send(msg);
   }
 }
 
 wss.on("connection", (ws) => {
-    // ✅ Limit to 8 players
-  if (clients.size >= 8) {
-    ws.send(JSON.stringify({ type: "full" }));
-    ws.close();
-    return;
-  }
-
+  const room = findRoom();
+  const index = room.clients.size;
   const id = String(nextId++);
-  const index = clients.size; // 0..7
-
-  const colors = ["green","blue","red","orange","purple","cyan","magenta","brown"];
 
   const player = {
     id,
     x: 400,
     y: 250,
     angle: 0,
-    color: colors[index],
+    color: colors[index % colors.length],
     label: `Player${index + 1}`
   };
 
+  room.clients.set(ws, player);
 
-  clients.set(ws, player);
+  ws.send(JSON.stringify({
+    type: "welcome",
+    id,
+    room: rooms.indexOf(room) + 1
+  }));
 
-  ws.send(JSON.stringify({ type: "welcome", id }));
-  broadcastState();
+  broadcastRoom(room);
 
   ws.on("message", (data) => {
     let msg;
-    try { msg = JSON.parse(data.toString()); } catch { return; }
+    try { msg = JSON.parse(data); } catch { return; }
 
     if (msg.type === "move") {
-      const p = clients.get(ws);
+      const p = room.clients.get(ws);
       if (!p) return;
       p.x = msg.x;
       p.y = msg.y;
       p.angle = msg.angle;
-      broadcastState();
+      broadcastRoom(room);
     }
   });
 
   ws.on("close", () => {
-    clients.delete(ws);
-    broadcastState();
+    room.clients.delete(ws);
+    broadcastRoom(room);
   });
 });
 
