@@ -58,6 +58,15 @@ function broadcastRoom(room) {
   }
 }
 
+function broadcastChat(room, from, text) {
+  const msg = JSON.stringify({ type: "chat", from, text });
+
+  for (const ws of room.clients.keys()) {
+    if (ws.readyState === ws.OPEN) ws.send(msg);
+  }
+}
+
+/* ✅ BOT */
 const BOT_MESSAGES = [
   "Reminder: Please be respectful. No swearing.",
   "Keep it friendly 🙂 No bad words.",
@@ -70,20 +79,10 @@ function startBot() {
   setInterval(() => {
     for (const room of rooms) {
       if (!room || room.clients.size === 0) continue;
-
       const msg = BOT_MESSAGES[Math.floor(Math.random() * BOT_MESSAGES.length)];
       broadcastChat(room, "ServerBot", msg);
     }
-  }, 6000); // ✅ every 60 seconds (change if you want)
-}
-
-
-function broadcastChat(room, from, text) {
-  const msg = JSON.stringify({ type: "chat", from, text });
-
-  for (const ws of room.clients.keys()) {
-    if (ws.readyState === ws.OPEN) ws.send(msg);
-  }
+  }, 15000); // ✅ every 15 seconds (change to 60000 for 60s)
 }
 
 wss.on("connection", (ws) => {
@@ -122,7 +121,6 @@ wss.on("connection", (ws) => {
       const p = room.clients.get(ws);
       if (!p) return;
 
-      // small safety clamps
       p.x = Math.max(0, Math.min(800, Number(msg.x)));
       p.y = Math.max(0, Math.min(500, Number(msg.y)));
       p.angle = Number(msg.angle) || 0;
@@ -152,6 +150,9 @@ wss.on("connection", (ws) => {
     if (p) broadcastChat(room, "Server", `${p.label} left`);
   });
 });
+
+/* ✅ START THE BOT (this was missing) */
+startBot();
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
