@@ -224,7 +224,7 @@ function updateRoom(room) {
         p.x = W / 2;
         p.y = H / 2;
         p.angle = 0;
-        broadcastChat(room, "ServerBot", `${p.label} is OUT for 30 seconds!`);
+        broadcastChat(room, "ServerBot", `${p.label} is OUT for 5 seconds!`);
         break;
       }
     }
