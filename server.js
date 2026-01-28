@@ -1,5 +1,3 @@
-// server.js (FULL) ✅ Rooms + Chat + Badwords + 3 warnings kick + Enemies + Sword kills + Score saved by token + LEADERBOARD
-
 import http from "http";
 import { WebSocketServer } from "ws";
 
@@ -21,28 +19,25 @@ let nextId = 1;
 const colors = ["green", "blue", "red", "orange", "purple", "cyan", "magenta", "brown"];
 
 /* Enemies */
-const MAX_HAZARDS = 14;
-const SPAWN_EVERY_MS = 900;   // spawn rate (lower = faster)
-const HAZARD_SPEED = 2.3;     // move speed
-const HAZARD_SIZE = 10;       // size
-const TICK_MS = 33;           // ~30 fps
+const MAX_HAZARDS = 10;
+const SPAWN_EVERY_MS = 700;   // spawn rate
+const HAZARD_SPEED = 2.3;
+const HAZARD_SIZE = 10;
+const TICK_MS = 33;          // ~30 fps
 
 /* Out rule */
-const OUT_MS = 30000;
+const OUT_MS = 4000;
 const PLAYER_HIT_RADIUS = 18;
 
 /* Sword */
-const SWORD_REACH = 44;       // sword tip distance in front (match nicer sword)
-const SWORD_HIT_RADIUS = 10;  // sword tip hit radius
+const SWORD_REACH = 34;       // distance in front of player
+const SWORD_HIT_RADIUS = 10;  // sword "tip" hit radius
 
 /* Score persistence in memory (by token) */
 const tokenScores = new Map(); // token -> score
 
-/* Leaderboard */
-const LEADERBOARD_SIZE = 10;
-
 /* =========================
-   BAD WORD FILTER
+   BAD WORD FILTER + BOT
 ========================= */
 
 const BAD_WORDS = [
@@ -83,13 +78,6 @@ function clamp(n, min, max) {
 }
 function now() { return Date.now(); }
 function dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
-
-function getLeaderboard() {
-  return [...tokenScores.entries()]
-    .map(([token, score]) => ({ token, score }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, LEADERBOARD_SIZE);
-}
 
 function findRoom() {
   for (const room of rooms) {
@@ -137,8 +125,7 @@ function buildState(room) {
     size: h.size
   }));
 
-  const leaderboard = getLeaderboard();
-  return { type: "state", players, hazards, leaderboard };
+  return { type: "state", players, hazards };
 }
 
 function sendState(room) {
@@ -174,10 +161,9 @@ function spawnHazard(room) {
 }
 
 function swordTip(p) {
-  return {
-    tx: p.x + Math.cos(p.angle) * SWORD_REACH,
-    ty: p.y + Math.sin(p.angle) * SWORD_REACH
-  };
+  const tx = p.x + Math.cos(p.angle) * SWORD_REACH;
+  const ty = p.y + Math.sin(p.angle) * SWORD_REACH;
+  return { tx, ty };
 }
 
 function updateRoom(room) {
@@ -198,7 +184,8 @@ function updateRoom(room) {
   // remove hazards far away
   room.hazards = room.hazards.filter(h => h.x > -80 && h.x < W + 80 && h.y > -80 && h.y < H + 80);
 
-  // SWORD KILLS
+  // 1) SWORD KILLS (server-side, fair)
+  // If sword tip touches hazard -> hazard dies + +1 score (saved by token)
   const remaining = [];
   for (const h of room.hazards) {
     let killedBy = null;
@@ -207,7 +194,9 @@ function updateRoom(room) {
       if ((p.outUntil || 0) > t) continue;
 
       const { tx, ty } = swordTip(p);
-      if (dist(tx, ty, h.x, h.y) <= (h.size + SWORD_HIT_RADIUS)) {
+      const hit = dist(tx, ty, h.x, h.y) <= (h.size + SWORD_HIT_RADIUS);
+
+      if (hit) {
         killedBy = p;
         break;
       }
@@ -217,23 +206,25 @@ function updateRoom(room) {
       killedBy.score = (killedBy.score || 0) + 1;
       if (killedBy.token) tokenScores.set(killedBy.token, killedBy.score);
       broadcastChat(room, "ServerBot", `${killedBy.label} killed an enemy! (+1)`);
+      // do not keep this hazard
     } else {
       remaining.push(h);
     }
   }
   room.hazards = remaining;
 
-  // ENEMY TOUCHES PLAYER -> OUT 30 sec
+  // 2) ENEMY TOUCHES PLAYER -> OUT 30 sec
   for (const p of room.clients.values()) {
     if ((p.outUntil || 0) > t) continue;
 
     for (const h of room.hazards) {
-      if (dist(p.x, p.y, h.x, h.y) <= PLAYER_HIT_RADIUS + h.size) {
+      const d = dist(p.x, p.y, h.x, h.y);
+      if (d <= PLAYER_HIT_RADIUS + h.size) {
         p.outUntil = t + OUT_MS;
         p.x = W / 2;
         p.y = H / 2;
         p.angle = 0;
-        broadcastChat(room, "ServerBot", `${p.label} is OUT for 30 seconds!`);
+        broadcastChat(room, "ServerBot", `${p.label} is OUT for 5 seconds!`);
         break;
       }
     }
@@ -284,7 +275,7 @@ wss.on("connection", (ws) => {
 
   const player = {
     id,
-    token: null,
+    token: null,          // set by "hello"
     x: W / 2,
     y: H / 2,
     angle: 0,
@@ -305,7 +296,7 @@ wss.on("connection", (ws) => {
     let msg;
     try { msg = JSON.parse(data.toString()); } catch { return; }
 
-    // HELLO (token for score)
+    // HELLO (token for saved score)
     if (msg.type === "hello") {
       const p = room.clients.get(ws);
       if (!p) return;
@@ -314,13 +305,15 @@ wss.on("connection", (ws) => {
       if (!token) return;
 
       p.token = token;
-      p.score = tokenScores.get(token) ?? 0;
+      const saved = tokenScores.get(token) ?? 0;
+      p.score = saved;
 
       ws.send(JSON.stringify({ type: "score", score: p.score }));
+      broadcastChat(room, "ServerBot", `${p.label} score loaded: ${p.score}`);
       return;
     }
 
-    // MOVE
+    // MOVE (blocked if OUT)
     if (msg.type === "move") {
       const p = room.clients.get(ws);
       if (!p) return;
@@ -332,7 +325,7 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    // CHAT (filtered + warnings + kick)
+    // CHAT (filtered + warning/kick)
     if (msg.type === "chat") {
       const p = room.clients.get(ws);
       if (!p) return;
