@@ -66,6 +66,25 @@ wss.on("connection", (ws) => {
       p.angle = msg.angle;
       broadcastRoom(room);
     }
+
+    if (msg.type === "chat") {
+  const p = room.clients.get(ws);
+  if (!p) return;
+
+  const chatMsg = JSON.stringify({
+    type: "chat",
+    from: p.label,
+    text: msg.text
+  });
+
+  // enviar solo a la room
+  for (const client of room.clients.keys()) {
+    if (client.readyState === client.OPEN) {
+      client.send(chatMsg);
+    }
+  }
+}
+
   });
 
   ws.on("close", () => {
