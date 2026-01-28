@@ -37,6 +37,11 @@ function cleanText(text) {
     const rx = new RegExp(escapeRegExp(word), "gi");
     result = result.replace(rx, "*".repeat(word.length));
   }
+  function containsBadWord(originalText) {
+  const text = String(originalText ?? "").toLowerCase();
+  return BAD_WORDS.some(word => text.includes(word));
+}
+
   return result;
 }
 
@@ -129,17 +134,30 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    // CHAT (filtered)
-    if (msg.type === "chat") {
-      const p = room.clients.get(ws);
-      if (!p) return;
+    // CHAT (filtered + bot warning)
+if (msg.type === "chat") {
+  const p = room.clients.get(ws);
+  if (!p) return;
 
-      const filteredText = cleanText(msg.text);
-      if (!filteredText.trim()) return;
+  const originalText = String(msg.text ?? "");
+  const filteredText = cleanText(originalText);
+  if (!filteredText.trim()) return;
 
-      broadcastChat(room, p.label, filteredText);
-      return;
-    }
+  // Send the cleaned message
+  broadcastChat(room, p.label, filteredText);
+
+  // 🚨 If they swore, bot calls them out
+  if (containsBadWord(originalText)) {
+    broadcastChat(
+      room,
+      "ServerBot",
+      `${p.label}, please do not swear.`
+    );
+  }
+  return;
+}
+
+
   });
 
   ws.on("close", () => {
