@@ -19,8 +19,8 @@ let nextId = 1;
 const colors = ["green", "blue", "red", "orange", "purple", "cyan", "magenta", "brown"];
 
 /* Enemies */
-const MAX_HAZARDS = 14;
-const SPAWN_EVERY_MS = 900;   // spawn rate
+const MAX_HAZARDS = 10;
+const SPAWN_EVERY_MS = 700;   // spawn rate
 const HAZARD_SPEED = 2.3;
 const HAZARD_SIZE = 10;
 const TICK_MS = 33;          // ~30 fps
