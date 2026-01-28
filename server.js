@@ -27,7 +27,7 @@ const HAZARD_SIZE = 10;
 const TICK_MS = 33;          // ~30 fps
 
 /* Out rule */
-const OUT_MS = 30000;
+const OUT_MS = 5000;
 const PLAYER_HIT_RADIUS = 18; // collision radius
 
 /* =========================
