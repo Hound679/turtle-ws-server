@@ -8,10 +8,36 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocketServer({ server });
 
 const MAX_PLAYERS = 8;
-const rooms = []; // each room = { clients: Map() }
+const rooms = []; // each room: { clients: Map() }
 let nextId = 1;
 
-const colors = ["green","blue","red","orange","purple","cyan","magenta","brown"];
+const colors = ["green", "blue", "red", "orange", "purple", "cyan", "magenta", "brown"];
+
+// ✅ Safe starter list (add your own words here)
+const BAD_WORDS = [
+  "fuck",
+  "shit",
+  "bitch",
+  "asshole",
+  "puta",
+  "mierda",
+  "pendejo",
+  "cabron"
+];
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Replace bad words with **** (case-insensitive)
+function cleanText(text) {
+  let result = String(text ?? "").slice(0, 160); // limit length
+  for (const word of BAD_WORDS) {
+    const rx = new RegExp(escapeRegExp(word), "gi");
+    result = result.replace(rx, "*".repeat(word.length));
+  }
+  return result;
+}
 
 function findRoom() {
   for (const room of rooms) {
@@ -25,6 +51,15 @@ function findRoom() {
 function broadcastRoom(room) {
   const players = [...room.clients.values()];
   const msg = JSON.stringify({ type: "state", players });
+
+  for (const ws of room.clients.keys()) {
+    if (ws.readyState === ws.OPEN) ws.send(msg);
+  }
+}
+
+function broadcastChat(room, from, text) {
+  const msg = JSON.stringify({ type: "chat", from, text });
+
   for (const ws of room.clients.keys()) {
     if (ws.readyState === ws.OPEN) ws.send(msg);
   }
@@ -32,7 +67,9 @@ function broadcastRoom(room) {
 
 wss.on("connection", (ws) => {
   const room = findRoom();
-  const index = room.clients.size;
+  const roomNumber = rooms.indexOf(room) + 1;
+
+  const index = room.clients.size; // 0..7 within room
   const id = String(nextId++);
 
   const player = {
@@ -49,47 +86,49 @@ wss.on("connection", (ws) => {
   ws.send(JSON.stringify({
     type: "welcome",
     id,
-    room: rooms.indexOf(room) + 1
+    room: roomNumber
   }));
 
   broadcastRoom(room);
+  broadcastChat(room, "Server", `${player.label} joined (Room ${roomNumber})`);
 
   ws.on("message", (data) => {
     let msg;
-    try { msg = JSON.parse(data); } catch { return; }
+    try { msg = JSON.parse(data.toString()); } catch { return; }
 
+    // MOVE
     if (msg.type === "move") {
       const p = room.clients.get(ws);
       if (!p) return;
-      p.x = msg.x;
-      p.y = msg.y;
-      p.angle = msg.angle;
+
+      // small safety clamps
+      p.x = Math.max(0, Math.min(800, Number(msg.x)));
+      p.y = Math.max(0, Math.min(500, Number(msg.y)));
+      p.angle = Number(msg.angle) || 0;
+
       broadcastRoom(room);
+      return;
     }
 
+    // CHAT (filtered)
     if (msg.type === "chat") {
-  const p = room.clients.get(ws);
-  if (!p) return;
+      const p = room.clients.get(ws);
+      if (!p) return;
 
-  const chatMsg = JSON.stringify({
-    type: "chat",
-    from: p.label,
-    text: msg.text
-  });
+      const filteredText = cleanText(msg.text);
+      if (!filteredText.trim()) return;
 
-  // enviar solo a la room
-  for (const client of room.clients.keys()) {
-    if (client.readyState === client.OPEN) {
-      client.send(chatMsg);
+      broadcastChat(room, p.label, filteredText);
+      return;
     }
-  }
-}
-
   });
 
   ws.on("close", () => {
+    const p = room.clients.get(ws);
     room.clients.delete(ws);
+
     broadcastRoom(room);
+    if (p) broadcastChat(room, "Server", `${p.label} left`);
   });
 });
 
