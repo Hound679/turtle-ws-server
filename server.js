@@ -58,6 +58,26 @@ function broadcastRoom(room) {
   }
 }
 
+const BOT_MESSAGES = [
+  "Reminder: Please be respectful. No swearing.",
+  "Keep it friendly 🙂 No bad words.",
+  "Chat rules: be kind, no insults, no swearing.",
+  "Tip: If you're upset, take a break and try again."
+];
+
+// Sends one bot message to every room
+function startBot() {
+  setInterval(() => {
+    for (const room of rooms) {
+      if (!room || room.clients.size === 0) continue;
+
+      const msg = BOT_MESSAGES[Math.floor(Math.random() * BOT_MESSAGES.length)];
+      broadcastChat(room, "ServerBot", msg);
+    }
+  }, 60000); // ✅ every 60 seconds (change if you want)
+}
+
+
 function broadcastChat(room, from, text) {
   const msg = JSON.stringify({ type: "chat", from, text });
 
