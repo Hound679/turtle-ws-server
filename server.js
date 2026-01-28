@@ -13,7 +13,10 @@ let nextId = 1;
 
 const colors = ["green", "blue", "red", "orange", "purple", "cyan", "magenta", "brown"];
 
-// ✅ Safe starter list (add your own words here)
+/* =========================
+   BAD WORD SYSTEM
+========================= */
+
 const BAD_WORDS = [
   "fuck",
   "motherfucker",
@@ -30,20 +33,23 @@ function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Replace bad words with **** (case-insensitive)
 function cleanText(text) {
-  let result = String(text ?? "").slice(0, 160); // limit length
+  let result = String(text ?? "").slice(0, 160);
   for (const word of BAD_WORDS) {
     const rx = new RegExp(escapeRegExp(word), "gi");
     result = result.replace(rx, "*".repeat(word.length));
   }
-  function containsBadWord(originalText) {
-  const text = String(originalText ?? "").toLowerCase();
-  return BAD_WORDS.some(word => text.includes(word));
-}
-
   return result;
 }
+
+function containsBadWord(text) {
+  const lower = String(text ?? "").toLowerCase();
+  return BAD_WORDS.some(word => lower.includes(word));
+}
+
+/* =========================
+   ROOMS
+========================= */
 
 function findRoom() {
   for (const room of rooms) {
@@ -53,6 +59,10 @@ function findRoom() {
   rooms.push(newRoom);
   return newRoom;
 }
+
+/* =========================
+   BROADCAST HELPERS
+========================= */
 
 function broadcastRoom(room) {
   const players = [...room.clients.values()];
@@ -65,21 +75,22 @@ function broadcastRoom(room) {
 
 function broadcastChat(room, from, text) {
   const msg = JSON.stringify({ type: "chat", from, text });
-
   for (const ws of room.clients.keys()) {
     if (ws.readyState === ws.OPEN) ws.send(msg);
   }
 }
 
-/* ✅ BOT */
+/* =========================
+   SERVER BOT
+========================= */
+
 const BOT_MESSAGES = [
   "Reminder: Please be respectful. No swearing.",
-  "Keep it friendly 🙂 No bad words.",
-  "Chat rules: be kind, no insults, no swearing.",
-  "Tip: If you're upset, take a break and try again."
+  "Keep it friendly 🙂",
+  "Chat rules: be kind and respectful.",
+  "No bad words please."
 ];
 
-// Sends one bot message to every room
 function startBot() {
   setInterval(() => {
     for (const room of rooms) {
@@ -87,14 +98,18 @@ function startBot() {
       const msg = BOT_MESSAGES[Math.floor(Math.random() * BOT_MESSAGES.length)];
       broadcastChat(room, "ServerBot", msg);
     }
-  }, 15000); // ✅ every 15 seconds (change to 60000 for 60s)
+  }, 15000); // every 15 seconds
 }
+
+/* =========================
+   WEBSOCKET
+========================= */
 
 wss.on("connection", (ws) => {
   const room = findRoom();
   const roomNumber = rooms.indexOf(room) + 1;
 
-  const index = room.clients.size; // 0..7 within room
+  const index = room.clients.size;
   const id = String(nextId++);
 
   const player = {
@@ -121,7 +136,7 @@ wss.on("connection", (ws) => {
     let msg;
     try { msg = JSON.parse(data.toString()); } catch { return; }
 
-    // MOVE
+    /* MOVE */
     if (msg.type === "move") {
       const p = room.clients.get(ws);
       if (!p) return;
@@ -134,30 +149,28 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    // CHAT (filtered + bot warning)
-if (msg.type === "chat") {
-  const p = room.clients.get(ws);
-  if (!p) return;
+    /* CHAT */
+    if (msg.type === "chat") {
+      const p = room.clients.get(ws);
+      if (!p) return;
 
-  const originalText = String(msg.text ?? "");
-  const filteredText = cleanText(originalText);
-  if (!filteredText.trim()) return;
+      const originalText = String(msg.text ?? "");
+      const filteredText = cleanText(originalText);
+      if (!filteredText.trim()) return;
 
-  // Send the cleaned message
-  broadcastChat(room, p.label, filteredText);
+      // Send cleaned message
+      broadcastChat(room, p.label, filteredText);
 
-  // 🚨 If they swore, bot calls them out
-  if (containsBadWord(originalText)) {
-    broadcastChat(
-      room,
-      "ServerBot",
-      `${p.label}, please do not swear.`
-    );
-  }
-  return;
-}
-
-
+      // 🚨 Bot calls out swearing player
+      if (containsBadWord(originalText)) {
+        broadcastChat(
+          room,
+          "ServerBot",
+          `${p.label}, please do not swear.`
+        );
+      }
+      return;
+    }
   });
 
   ws.on("close", () => {
@@ -169,7 +182,10 @@ if (msg.type === "chat") {
   });
 });
 
-/* ✅ START THE BOT (this was missing) */
+/* =========================
+   START
+========================= */
+
 startBot();
 
 const PORT = process.env.PORT || 10000;
