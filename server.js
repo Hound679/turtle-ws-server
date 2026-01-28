@@ -81,7 +81,7 @@ function broadcastChat(room, from, text) {
 }
 
 /* =========================
-   SERVER BOT
+   SERVER BOT (optional reminders)
 ========================= */
 
 const BOT_MESSAGES = [
@@ -98,7 +98,7 @@ function startBot() {
       const msg = BOT_MESSAGES[Math.floor(Math.random() * BOT_MESSAGES.length)];
       broadcastChat(room, "ServerBot", msg);
     }
-  }, 15000); // every 15 seconds
+  }, 15000); // every 15 seconds (change if you want)
 }
 
 /* =========================
@@ -118,7 +118,8 @@ wss.on("connection", (ws) => {
     y: 250,
     angle: 0,
     color: colors[index % colors.length],
-    label: `Player${index + 1}`
+    label: `Player${index + 1}`,
+    warnings: 0 // ✅ warnings counter
   };
 
   room.clients.set(ws, player);
@@ -161,14 +162,26 @@ wss.on("connection", (ws) => {
       // Send cleaned message
       broadcastChat(room, p.label, filteredText);
 
-      // 🚨 Bot calls out swearing player
+      // 🚨 If they swore → warning + possible kick
       if (containsBadWord(originalText)) {
-        broadcastChat(
-          room,
-          "ServerBot",
-          `${p.label}, please do not swear.`
-        );
+        p.warnings += 1;
+
+        if (p.warnings >= 3) {
+          broadcastChat(room, "ServerBot", `${p.label} was kicked (3 warnings).`);
+
+          // Kick (not permanent): they can reconnect later
+          // Custom close code in the 4000–4999 range is allowed
+          try { ws.close(4001, "Kicked for swearing"); } catch {}
+          return;
+        } else {
+          broadcastChat(
+            room,
+            "ServerBot",
+            `${p.label}, please do not swear. Warning ${p.warnings}/3.`
+          );
+        }
       }
+
       return;
     }
   });
